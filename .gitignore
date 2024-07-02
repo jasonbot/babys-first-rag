@@ -165,3 +165,4 @@ transcript_pages/
 processed_pages/
 *llama*
 *.db
+*.*-journal
