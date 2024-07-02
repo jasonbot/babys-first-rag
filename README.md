@@ -9,3 +9,4 @@ Please keep in mind this repo may be used for inspiration, but the code _may not
 - `spider.py`: Script to find and fetch all the Joe Rogan transcripts
 - `cleanup.py`: Script to clean up all the transcripts into RAG-importable JSON files
 - `run-unstructured.py`: Script to process transcript HTML through the Unstructured API
+- `build-sqlite.py`: Script to build the SQLite database
