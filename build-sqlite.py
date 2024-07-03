@@ -3,6 +3,7 @@ import pathlib
 import shlex
 import sqlite3
 import subprocess
+import sys
 
 import sqlite_vec
 
@@ -54,11 +55,22 @@ def create_tables(connection: sqlite3.Connection):
         transaction.execute(
             """
                 create table utterances(
-                    filename,
+                    filename text,
                     utterance text
                 );
             """
         )
+
+
+def _sliding_window(row_factory, window_size=9, overlap=3):
+    window = []
+    for row in row_factory:
+        if len(window) == window_size:
+            yield window
+            window = window[-overlap:]
+        window.append(row)
+    if window:
+        yield window
 
 
 def insert_text_items_for_folder(
@@ -66,16 +78,18 @@ def insert_text_items_for_folder(
     folder: pathlib.Path = pathlib.Path("./processed_pages"),
 ):
     for file in folder.glob("*.json"):
-        print(f"Loading transcript from {file}...")
+        print(f"Loading transcript from {file}: ", end="")
         with connection as transaction, open(file, "r") as in_json:
             json_object = json.load(in_json)
-            for item in json_object:
-                if item["type"] == "NarrativeText":
-                    text = item["text"]
-                    transaction.execute(
-                        "insert into utterances(filename, utterance) values(?, ?)",
-                        (str(file), text),
-                    )
+            for text in _sliding_window(
+                item["text"] for item in json_object if item["type"] == "NarrativeText"
+            ):
+                transaction.execute(
+                    "insert into utterances(filename, utterance) values(?, ?)",
+                    (str(file), "\n".join(text)),
+                )
+                print(".", end="")
+        print()
 
 
 def insert_embeddings_for_database(
@@ -88,13 +102,19 @@ def insert_embeddings_for_database(
         ):
             rowid, filename, text = row
             if current_filename != filename:
-                print(f"Doing embeddings for {filename}...")
+                if current_filename:
+                    print()
+                print(f"Doing embeddings for {filename}: ", end="")
                 current_filename = filename
+            print(".", end="")
+            sys.stdout.flush()
             embedding = embedding_for_text(text)
             transaction.execute(
                 "insert into vec_chat(rowid, embedding) values (?, ?)",
                 (rowid, json.dumps(embedding)),
             )
+    print()
+    print("Done")
 
 
 if __name__ == "__main__":
