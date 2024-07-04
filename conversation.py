@@ -17,30 +17,36 @@ class TranscriptItem(abc.ABC):
 
 
 class UserItem(TranscriptItem):
-    prefix: "me"
+    prefix = "me"
 
 
 class LlamaItem(TranscriptItem):
-    prefix: "llama"
+    prefix = "llama"
 
 
 class InjectionItem(TranscriptItem): ...
 
 
 class Conversation:
-    prompt: str
+    prompt: str = "You are llama, a useful chatbot who is always helpful and polite."
+    injections: list[InjectionItem]
     transcript: list[TranscriptItem]
 
     @property
     def log(self):
-        return self.prompt + "\n\n" + "\n".join(str(item) for item in self.transcript)
+        return (
+            self.prompt
+            + "\n\n"
+            + "\n".join(str(item) for item in self.injections)
+            + "\n".join(str(item) for item in self.transcript)
+        )
 
     @property
     def log_with_prompt(self):
         return self.log + f"\n{LlamaItem.prefix}:"
 
     def inject(self, data: str):
-        self.transcript.append(InjectionItem(data))
+        self.injections.append(InjectionItem(data))
 
     def ask(self, question: str):
         self.transcript.append(UserItem(question))

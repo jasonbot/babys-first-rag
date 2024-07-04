@@ -10,3 +10,4 @@ Please keep in mind this repo may be used for inspiration, but the code _may not
 - `cleanup.py`: Script to clean up all the transcripts into RAG-importable JSON files
 - `run-unstructured.py`: Script to process transcript HTML through the Unstructured API
 - `build-sqlite.py`: Script to build the SQLite database
+- `llm_functions.py`: Some shared routines I use between multiople scripts

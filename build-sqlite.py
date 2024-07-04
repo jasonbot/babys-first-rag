@@ -3,34 +3,28 @@ import pathlib
 import sqlite3
 import sys
 
-from llm_functions import embedding_for_text, fresh_db_connection
+from llm_functions import create_tables, embedding_for_text, fresh_db_connection
 
 
-def create_tables(connection: sqlite3.Connection):
-    vector_size = len(embedding_for_text("Dummy string to get back an embedding"))
-    with connection as transaction:
-        transaction.execute(
-            f"""
-                create virtual table vec_chat using vec0(
-                    embedding float[{vector_size}]
-                );
-            """
-        )
-
-        transaction.execute(
-            """
-                create table utterances(
-                    filename text,
-                    utterance text
-                );
-            """
-        )
-
-
-def _sliding_window(row_factory, window_size=9, overlap=3):
+def _sliding_window(
+    row_factory, window_size=4, overlap=1, min_length=80, max_length=160
+):
     window = []
     for row in row_factory:
-        if len(window) == window_size:
+        if len(row) < min_length:
+            continue
+        elif len(row) > max_length:
+            # Special case: just in case this combined with other entries goes over max length.
+            if window:
+                yield window
+            yield [row]
+            window = []
+            continue
+        elif len("".join(window)) > max_length:
+            yield window
+            window = []
+
+        if len(window) >= window_size:
             yield window
             window = window[-overlap:]
         window.append(row)
@@ -47,10 +41,12 @@ def insert_text_items_for_folder(
         with connection as transaction, open(file, "r") as in_json:
             json_object = json.load(in_json)
             for text in _sliding_window(
-                item["text"] for item in json_object if item["type"] == "NarrativeText"
+                item["text"]
+                for item in json_object
+                if item["type"] in ("Title", "NarrativeText")
             ):
                 transaction.execute(
-                    "insert into utterances(filename, utterance) values(?, ?)",
+                    "insert into text_lines(filename, text_line) values(?, ?)",
                     (str(file), "\n".join(text)),
                 )
                 print(".", end="")
@@ -63,7 +59,8 @@ def insert_embeddings_for_database(
     current_filename = None
     with connection as transaction:
         for row in transaction.execute(
-            "select rowid, filename, utterance from utterances"
+            "select rowid, filename, text_line from text_lines where rowid not in "
+            "(select rowid from vec_chat)"
         ):
             rowid, filename, text = row
             if current_filename != filename:
@@ -71,13 +68,16 @@ def insert_embeddings_for_database(
                     print()
                 print(f"Doing embeddings for {filename}: ", end="")
                 current_filename = filename
-            print(".", end="")
-            sys.stdout.flush()
             embedding = embedding_for_text(text)
-            transaction.execute(
-                "insert into vec_chat(rowid, embedding) values (?, ?)",
-                (rowid, json.dumps(embedding)),
-            )
+            if len(embedding) == 0:
+                print("!", end="")
+            else:
+                print(".", end="")
+                transaction.execute(
+                    "insert into vec_chat(rowid, embedding) values (?, ?)",
+                    (rowid, json.dumps(embedding)),
+                )
+            sys.stdout.flush()
     print()
     print("Done")
 
