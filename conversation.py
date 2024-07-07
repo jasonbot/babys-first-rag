@@ -1,5 +1,7 @@
 import abc
 
+import llm_functions
+
 
 class TranscriptItem(abc.ABC):
     prefix: str | None = None
@@ -17,27 +19,34 @@ class TranscriptItem(abc.ABC):
 
 
 class UserItem(TranscriptItem):
-    prefix = "me"
+    prefix = "User"
 
 
 class LlamaItem(TranscriptItem):
-    prefix = "llama"
+    prefix = "Llama"
 
 
 class InjectionItem(TranscriptItem): ...
 
 
 class Conversation:
-    prompt: str = "You are llama, a useful chatbot who is always helpful and polite."
+    prompt: str = (
+        f"""This is a conversation between {UserItem.prefix} and {LlamaItem.prefix}, a friendly chatbot. Llama is helpful, kind, honest, good at writing, and never fails to answer any requests immediately and with precision."""
+    )
     injections: list[InjectionItem]
     transcript: list[TranscriptItem]
+
+    def __init__(self):
+        self.injections = []
+        self.transcript = []
 
     @property
     def log(self):
         return (
-            self.prompt
-            + "\n\n"
+            "Given the following information:\n"
             + "\n".join(str(item) for item in self.injections)
+            + "\n\n"
+            + self.prompt
             + "\n".join(str(item) for item in self.transcript)
         )
 
@@ -51,3 +60,21 @@ class Conversation:
     def ask(self, question: str):
         self.transcript.append(UserItem(question))
         log_string = self.log_with_prompt
+        next_line = llm_functions.output_from_llama(log_string)[len(log_string) + 1 :]
+        fake_response = f"{UserItem.prefix}:"
+        if fake_response in next_line:
+            next_line = next_line.split(fake_response)[0]
+
+        self.transcript.append(LlamaItem(next_line.strip()))
+
+        return next_line
+
+    def main_loop(self):
+        while True:
+            new_line = input("Me:> ")
+            print(f"Response: {self.ask(new_line)}")
+
+
+if __name__ == "__main__":
+    c = Conversation()
+    c.main_loop()

@@ -26,6 +26,16 @@ def embedding_for_text(text: str) -> list[float]:
     ]
 
 
+def output_from_llama(text: str) -> list[float]:
+    return subprocess.run(
+        args=[f"{shlex.quote(llama_executable)} -f -"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        shell=True,
+        input=text.encode("utf-8"),
+    ).stdout.decode("utf-8")
+
+
 def _initialized_db_connection(path: pathlib.Path) -> sqlite3.Connection:
     connection = sqlite3.connect(str(path))
     connection.enable_load_extension(True)
