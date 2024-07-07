@@ -40,10 +40,11 @@ def fresh_db_connection(*, overwrite=False) -> sqlite3.Connection:
         num: int = 1
         new_path = output_db
         while pathlib.Path(new_path).exists():
-            new_path = +f"{output_db}.{num}"
+            new_path = f"{output_db}.{num}"
             num += 1
         print(f"Moving exising {output_db} -> {new_path}")
         shutil.copy(output_db, new_path)
+        output_db.unlink()
     return _initialized_db_connection(output_db)
 
 
