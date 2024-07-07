@@ -1,6 +1,7 @@
 import json
 import pathlib
 import shlex
+import shutil
 import subprocess
 import sqlite3
 
@@ -33,10 +34,16 @@ def _initialized_db_connection(path: pathlib.Path) -> sqlite3.Connection:
     return connection
 
 
-def fresh_db_connection(*, overwrite=True) -> sqlite3.Connection:
+def fresh_db_connection(*, overwrite=False) -> sqlite3.Connection:
     output_db = pathlib.Path("./chatbot.db")
     if overwrite and output_db.exists():
-        output_db.unlink()
+        num: int = 1
+        new_path = output_db
+        while pathlib.Path(new_path).exists():
+            new_path = +f"{output_db}.{num}"
+            num += 1
+        print(f"Moving exising {output_db} -> {new_path}")
+        shutil.copy(output_db, new_path)
     return _initialized_db_connection(output_db)
 
 
@@ -55,7 +62,8 @@ def create_tables(connection: sqlite3.Connection):
             """
                 create table text_lines(
                     filename text,
-                    text_line text
+                    text_line text,
+                    embedding text
                 );
             """
         )
@@ -64,19 +72,19 @@ def create_tables(connection: sqlite3.Connection):
 def nearest_n_neighbors(
     text: str, connection: sqlite3.Connection, limit: int = 5
 ) -> list[int]:
+    limit = int(limit)
     with connection as transaction:
         return [
             x
             for x in transaction.execute(
-                """
+                f"""
                     select rowid, distance
                     from vec_chat
-                    where sample_embedding match ?
+                    where embedding match ?
                     order by distance
                     limit ?;
                 """,
-                json.dumps(embedding_for_text(text)),
-                limit,
+                (json.dumps(embedding_for_text(text)), limit),
             )
         ]
 
@@ -88,9 +96,23 @@ def nearest_n_text_lines(
         return [
             row[0]
             for row in connection.execute(
+                f"""
+                    select text_line from text_lines where rowid in {tuple(
+                        c[0]
+                        for c in nearest_n_neighbors(
+                            text, connection=connection, limit=limit
+                        )
+                    )}
                 """
-                    select text_line from text_lines where rowid in ? 
-                """,
-                nearest_n_neighbors(text, connection, limit),
             )
         ]
+
+
+if __name__ == "__main__":
+    connection = fresh_db_connection()
+    print(
+        nearest_n_text_lines(
+            "Anthony Fauci helped release the COVID vaccine",
+            connection,
+        )
+    )

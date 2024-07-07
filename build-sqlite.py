@@ -74,6 +74,10 @@ def insert_embeddings_for_database(
             else:
                 print(".", end="")
                 transaction.execute(
+                    "update text_lines set embedding = ? where rowid = ?",
+                    (json.dumps(embedding), rowid),
+                )
+                transaction.execute(
                     "insert into vec_chat(rowid, embedding) values (?, ?)",
                     (rowid, json.dumps(embedding)),
                 )
@@ -83,7 +87,7 @@ def insert_embeddings_for_database(
 
 
 if __name__ == "__main__":
-    connection = fresh_db_connection()
+    connection = fresh_db_connection(overwrite=True)
     create_tables(connection)
     insert_text_items_for_folder(connection)
     insert_embeddings_for_database(connection)
